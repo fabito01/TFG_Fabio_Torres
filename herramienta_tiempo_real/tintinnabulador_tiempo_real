@@ -1,0 +1,227 @@
+desc:Tintinnabulador Tiempo Real
+
+// Le decimos a Reaper que no procese audio (solo vamos a tratar con MIDI)
+in_pin:none
+out_pin:none
+
+// INTERFAZ DE USUARIO
+
+// Sliderx: valor_por_defecto <minimo, maximo, incremento> Nombre
+
+slider1:0<0,11,1{C,C#,D,D#,E,F,F#,G,G#,A,A#,B}>Nota Base
+//slider1:60<0,127,1>Nota Base MIDI
+slider2:3<1,8,1>Intervalos Activos 
+
+// Fijamos 8 sliders como máximo 
+
+// He puesto que pueda ir hasta 24 porque aunque luego al calcular la pitchClass 
+// y hacer modulo 12 se reduzca, se puedan poner intervalos de 9ª o 11ª 
+slider3:0<0,24,1>Intervalo 1
+slider4:4<0,24,1>Intervalo 2
+slider5:7<0,24,1>Intervalo 3
+slider6:0<0,24,1>Intervalo 4 
+slider7:0<0,24,1>Intervalo 5 
+slider8:0<0,24,1>Intervalo 6 
+slider9:0<0,24,1>Intervalo 7 
+slider10:0<0,24,1>Intervalo 8 
+
+// Siendo k = número de intervalos activos (slider2)
+slider11:1<-10,10,1>T-Voice   
+
+// Tiempo de retraso en negras
+slider12:0<0,16,0.25>Delay T-Voice (QN) 
+slider13:0<0,127,1>Nota Mínima
+slider14:127<0,127,1>Nota Máxima
+slider15:0<0,1,1{No,Sí}> Mantener Melodia Original
+//Slider para modificar la velocidad (+/- 127 posible)
+slider16:0<-127,127,1> Ajuste Velocity T-Voice
+
+
+//Bloque de arranque
+@init
+
+//Son punteros a zonas de la RAM de JSFX
+
+t_matriz     = 0;    // Ocupa las posiciones 0-127 de la RAM. Es la matriz de acceso para calcular las notas de la T-Voice
+tracker_notas = 128;  // Ocupa las posiciones 128-255 de la RAM. Guarda que nota tintinabulada se activo para apagarla correctamente
+vector_pc = 256;  // Ocupa las posiciones 256-263 de la RAM. Array para los Pitch Classes de la secuencia soporte
+
+
+// Nos ponemos en la posicion 1024 de la RAM para asegurar que no pisamos
+// nada de la información que se ha guardado antes.
+inicio_buffer = 1024; // Inicio del buffer para el  MIDI Delay 
+lectura = inicio_buffer;  // Puntero de lectura 
+escritura = inicio_buffer; // Puntero de escritura
+
+// Funcion para evaluar si una nota pertenece al mapa de la secuencia soporte
+// Utilizamos local para establecer que las variables son locales
+// Por defecto en EEL2 las variables son globales, de esta forma evitamos conflictos 
+function pertenece_acorde(nota) local(pc, i, match) (
+    pc = nota % 12; // Obtenemos la pitch class de nuestra nota
+    pertenece = 0; // "Booleano" para determinar si la nota pertenece
+    i = 0;
+    // El bucle SOLO recorre los primeros 'k' sliders activos
+    while(i < num_activos && pertenece == 0) (
+        pc == vector_pc[i] ? pertenece = 1;
+        i += 1;
+    );
+    
+    pertenece; // Retorna 1 si pertenece, 0 si no
+);
+
+//Bloque de sliders
+@slider
+
+//Guardamos la información de los sliders en variables
+nota_base = slider1;
+num_activos = slider2;
+t_voice = slider11;
+nota_min = slider13;
+nota_max = slider14;
+mantener_original = slider15;
+cambio_vel = slider16;
+
+//Corrección en caso de que la nota maxima sea menor que la nota minima (o al revés)
+nota_min> nota_max ? (
+  a = nota_min;
+  nota_min = nota_max;
+  nota_max = a;
+);
+
+//Guardamos las pitchClass de los intervalos en un array
+vector_pc[0] = (nota_base + slider3) % 12;
+vector_pc[1] = (nota_base + slider4) % 12;
+vector_pc[2] = (nota_base + slider5) % 12;
+vector_pc[3] = (nota_base + slider6) % 12;
+vector_pc[4] = (nota_base + slider7) % 12;
+vector_pc[5] = (nota_base + slider8) % 12;
+vector_pc[6] = (nota_base + slider9) % 12;
+vector_pc[7] = (nota_base + slider10) % 12;
+
+dir = t_voice > 0 ? 1 : -1;
+pasos = abs(t_voice);
+
+// Pre-calculo de la matriz de transformacion T-Matrix en O(1)
+i = 0;
+while(i < 128) (
+    c = 0; //contador
+    n = i; //nota temporal
+    
+    while(c < pasos && n >= 0 && n <= 127) (
+        n += dir;
+        pertenece_acorde(n) ? c += 1;
+    );
+    
+    //Si se pasa de los limites del MIDI salvamos la excepcion
+    n < 0 ? n = 0;
+    n > 127 ? n = 127;
+    t_matriz[i] = n;
+    
+    i += 1;
+);
+
+//Se ejecuta cada vez que el motor de audio procesa un bloque
+@block
+
+// Calculamos el delay de QN a "Samples" de retardo usando el tempo del proyecto
+// srate = Sample Rate 
+// Añadimos el 0.5 del final para redondear al número entero más cercano
+
+delay_samples = floor((slider12 * 60.0 / tempo) * srate + 0.5);
+
+
+
+
+// midirecv(offset, msg1, msg2, msg3)) 
+//offset = Muestra en que momento del bloque ocurre el evento
+//msg1 = Byte de estado (tipo de mensaje + canal MIDI)
+//msg2 = Que nota esta sonando
+//msg3 = La velocidad con la que se epulsa
+
+while (midirecv(offset, msg1, msg2, msg3)) (
+    status = msg1 & 0xF0;  //Nos quedamos solo con el tipo de mensaje 
+
+    // Si estamos pulsando una nota
+    // Note On con velocidad ==0 = Note Off
+    status == 0x90 && msg3 > 0 ? (
+        
+        msg2 >= nota_min && msg2 <= nota_max ? (
+          
+          //Si está activado el checkbox aparte de la T-Voice pasamos la M-Voice
+          mantener_original == 1 ? (
+              midisend(offset,msg1,msg2,msg3);
+          );
+        
+          tracker_notas[msg2] = t_matriz[msg2]; // Registrar la nota tintinnabulada 
+          
+          //Calculamos la velocidad y comprobamos que no se pase de los limites establecidos
+          
+          t_vel = msg3 + cambio_vel;
+          t_vel = max(min(t_vel,127),1);
+
+          slider12 == 0 ? (
+              midisend(offset, msg1, t_matriz[msg2], t_vel); // Envio instantaneo si delay es 0
+          ) : (
+              // Almacenamiento en el buffer para ejecucion retrasada
+              escritura[0] = offset + delay_samples;
+              escritura[1] = msg1;
+              escritura[2] = t_matriz[msg2];
+              escritura[3] = t_vel;
+              escritura += 4;
+          );
+        
+        );
+        
+    ) : 
+    
+    // Si el status es Note Off o Note On con velocidad 0 (que también se interpreta como Note Off)
+    status == 0x80 || (status == 0x90 && msg3 == 0) ? (
+        midisend(offset, msg1, msg2, msg3); // Apagar la nota original 
+
+        // Apagamos la T-Voice 
+        // Solo si la encendimos por eso vamos al Note Tracker
+        slider12 == 0 ? (
+            midisend(offset, msg1, tracker_notas[msg2], msg3); // Apagado instantaneo
+        ) : (
+            // El Note Off tambien debe retrasarse la misma cantidad de muestras
+            escritura[0] = offset + delay_samples;
+            escritura[1] = msg1;
+            escritura[2] = tracker_notas[msg2];
+            escritura[3] = msg3;
+            escritura += 4;
+        );
+        //);
+    ) : 
+    
+    // Todo lo demás que no sea Note On o Note Off pasa sin problema 
+    (
+        midisend(offset, msg1, msg2, msg3); // Mantener transparencia MIDI pasante
+    );
+);
+
+
+// MANTENIMIENTO DEL BUFFER (como en el plugin MIDI Delay)
+
+i = lectura; //Empezamos a leer desde el puntero de lectura del buffer
+while (i < escritura) (
+    i[0] < samplesblock ? (
+        // Si el tiempo programado cae dentro de este bloque de audio, se envia
+        midisend(max(floor(i[0]), 0), i[1], i[2], i[3]);
+        lectura = (i += 4); 
+    ) : (
+        // Si pertenece a un bloque futuro, descontamos las muestras de este bloque
+        i[0] -= samplesblock;
+        i += 4;
+    );
+);
+
+// Mantenimiento de la memoria del buffer para evitar desbordamientos
+lectura >= escritura ? (
+    lectura = escritura = inicio_buffer; 
+) : (
+    lectura > max(1024, escritura * 0.5) ? (
+        memcpy(inicio_buffer, lectura, escritura - lectura);
+        escritura = inicio_buffer + (escritura - lectura);
+        lectura = inicio_buffer; 
+    );
+);
