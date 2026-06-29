@@ -1,6 +1,6 @@
 # Tintinnabulador en Tiempo Real (Plugin JSFX)
 
-Esta herramienta consiste en un plugin MIDI nativo para REAPER que procesa la señal de un controlador MIDI y genera el contrapunto tintinnabular de forma interactiva y sin latencia perceptible.
+Esta herramienta consiste en un plugin MIDI nativo para REAPER que procesa la señal de un controlador MIDI o de un item MIDI existente y genera el contrapunto tintinnabular de forma interactiva y sin latencia perceptible.
 
 ## Dependencias
 
@@ -22,6 +22,7 @@ Esta herramienta consiste en un plugin MIDI nativo para REAPER que procesa la se
    * **Nota Base / Intervalos:** Define la secuencia soporte.
    * **T-Voice:** Selecciona el nivel de acompañamiento deseado.
    * **Delay T-Voice:** Se puede añadir un retraso en *quarter notes*.
+   * **Rango MIDI:** Permite ajustar el rango MIDI en el que se ejecuta el plugin.
    * **Mantener voz original:** Permite que suene solo el acompañamiento, o la melodía junto al acompañamiento.
    * **Ajuste velocity T-Voice:** Se puede ajustar la intensidad del ataque de las notas de acompañamiento.
 5. Finalmente, toca cualquier melodía y escucha la tintinnabulación en vivo.
