@@ -66,7 +66,7 @@ function pertenece_acorde(nota) local(pc, i, match) (
         i += 1;
     );
     
-    pertenece; // Retorna 1 si pertenece, 0 si no
+    pertenece; // Devuelve 1 si pertenece, 0 si no
 );
 
 //Bloque de sliders
@@ -81,7 +81,7 @@ nota_max = slider14;
 mantener_original = slider15;
 cambio_vel = slider16;
 
-//Corrección en caso de que la nota maxima sea menor que la nota minima (o al revés)
+//Corrección en caso de que la nota máxima sea menor que la nota mínima (o al revés)
 nota_min> nota_max ? (
   a = nota_min;
   nota_min = nota_max;
@@ -101,7 +101,7 @@ vector_pc[7] = (nota_base + slider10) % 12;
 dir = t_voice > 0 ? 1 : -1;
 pasos = abs(t_voice);
 
-// Pre-calculo de la matriz de transformacion T-Matrix en O(1)
+// Cálculo de t_matriz
 i = 0;
 while(i < 128) (
     c = 0; //contador
@@ -135,8 +135,8 @@ delay_samples = floor((slider12 * 60.0 / tempo) * srate + 0.5);
 // midirecv(offset, msg1, msg2, msg3)) 
 //offset = Muestra en que momento del bloque ocurre el evento
 //msg1 = Byte de estado (tipo de mensaje + canal MIDI)
-//msg2 = Que nota esta sonando
-//msg3 = La velocidad con la que se epulsa
+//msg2 = Qué nota esta sonando
+//msg3 = La velocidad con la que se pulsa
 
 while (midirecv(offset, msg1, msg2, msg3)) (
     status = msg1 & 0xF0;  //Nos quedamos solo con el tipo de mensaje 
@@ -154,7 +154,7 @@ while (midirecv(offset, msg1, msg2, msg3)) (
         
           tracker_notas[msg2] = t_matriz[msg2]; // Registrar la nota tintinnabulada 
           
-          //Calculamos la velocidad y comprobamos que no se pase de los limites establecidos
+          //Calculamos la velocidad y comprobamos que no se pase de los límites establecidos
           
           t_vel = msg3 + cambio_vel;
           t_vel = max(min(t_vel,127),1);
@@ -179,7 +179,7 @@ while (midirecv(offset, msg1, msg2, msg3)) (
         midisend(offset, msg1, msg2, msg3); // Apagar la nota original 
 
         // Apagamos la T-Voice 
-        // Solo si la encendimos por eso vamos al Note Tracker
+        // Solo si la encendimos por eso vamos al tracker_notas
         slider12 == 0 ? (
             midisend(offset, msg1, tracker_notas[msg2], msg3); // Apagado instantaneo
         ) : (
@@ -195,7 +195,7 @@ while (midirecv(offset, msg1, msg2, msg3)) (
     
     // Todo lo demás que no sea Note On o Note Off pasa sin problema 
     (
-        midisend(offset, msg1, msg2, msg3); // Mantener transparencia MIDI pasante
+        midisend(offset, msg1, msg2, msg3);
     );
 );
 
