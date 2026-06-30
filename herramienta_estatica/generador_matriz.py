@@ -45,7 +45,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     nota_base_str = sys.argv[1]
-    intervalos_str = sys.argv[2] if sys.argv[1] != 'a' else None
+    intervalos_str = sys.argv[2] 
     nivel = int(sys.argv[3])
     archivo_MIDI = sys.argv[4] if len(sys.argv) > 4 else None
     resultado = generar_matriz_tintinnabuli(nota_base_str, intervalos_str, nivel, archivo_MIDI)
